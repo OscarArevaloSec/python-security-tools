@@ -1,0 +1,1 @@
+Suspicious activity was observed from 203.0.113.50 attempting SSH authentication against lab systems. A phishing page was reported at hxxps://login-example[.]com/reset. The attachment hash was 44d88612fea8a8f36de82e1278abb02f. Review CVE-2023-1234 exposure if the vulnerable service is present.
