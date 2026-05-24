@@ -1,0 +1,4 @@
+host,reverse_dns,status,open_probe_ports,asset_hint,recommendation
+127.0.0.1,localhost,responsive,"22,80",linux_or_network_device_candidate,"SSH observed; verify key policy, MFA or bastion access, and source restrictions."
+192.168.56.10,lab-web01.local,responsive,"80,443",web_service_candidate,"Document owner, expected service exposure, patch status, and monitoring coverage."
+192.168.56.20,lab-win01.local,responsive,"445,3389",windows_or_admin_surface,"RDP observed; verify MFA, VPN or jump-host access, and account lockout controls."

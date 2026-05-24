@@ -1,0 +1,7 @@
+# Authorized scope sample for defensive enumeration practice
+# Replace these values with lab assets you own or have explicit permission to assess.
+# Do not add public IP ranges or third-party systems without written authorization.
+
+127.0.0.1/32
+localhost
+# 192.168.56.0/24
