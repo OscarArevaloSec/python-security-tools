@@ -12,7 +12,8 @@ These scripts are for educational use in authorized labs such as home labs, Hack
 | `ioc_parser.py` | Extract and defang IPs, domains, URLs, hashes, emails, and CVEs from text. | Supports phishing, malware, and threat-intel workflows. | Ready |
 | `hash_checker.py` | Hash files or strings and compare known hashes. | Supports file integrity review and malware triage basics. | Ready |
 | `asset_discovery.py` | Identify responsive assets in an authorized scope using conservative TCP probes. | Supports asset inventory, service exposure review, and blue-team visibility. | Ready |
-| `port_scanner.py` | Review open TCP services across authorized hosts, host lists, or small CIDR ranges. | Supports authorized service exposure review with TXT, HTML, CSV, JSON, and Markdown reporting for enumeration notes. | Ready |
+| `port_scanner.py` | Review open TCP services across authorized hosts, host lists, or small CIDR ranges using Python sockets. | Supports authorized service exposure review with TXT, CSV, JSON, and Markdown reporting. | Ready |
+| `nmap_scanner.py` | Run Nmap against authorized targets and parse Nmap XML output into a plain-text report. | Supports enumeration-phase notes with Nmap service/version details and TXT reporting only. | Ready |
 | `subdomain_enum.py` | DNS subdomain brute-forcer with dnspython or socket fallback. | Supports authorized DNS discovery practice. | Ready |
 | `dir_enum.py` | Web directory and file brute-forcer with status and size filtering. | Supports web lab enumeration and defensive log-awareness. | Ready |
 | `smb_enum.py` | SMB share enumeration and RPC user or group enumeration. | Supports Windows and SMB lab practice. | Ready |
@@ -24,13 +25,13 @@ These scripts are for educational use in authorized labs such as home labs, Hack
 |---|---|
 | Python | Python 3.10 or newer is recommended. |
 | Optional Python packages | `requests` for HTTP tools and `dnspython` for DNS enumeration. |
-| Optional system tools | `smbclient` for SMB workflows. |
+| Optional system tools | `nmap` for `nmap_scanner.py`; `smbclient` for SMB workflows. |
 
 Install optional packages only in your own lab environment:
 
 ```bash
 pip install requests dnspython
-sudo apt install smbclient
+sudo apt install nmap smbclient
 ```
 
 ## Blue-Team Workflows
@@ -41,7 +42,7 @@ sudo apt install smbclient
 | IOC extraction from a report | `python ioc_parser.py --file samples/threat_report_sample.txt` |
 | File hash verification | `python hash_checker.py --file suspicious.bin --algorithm sha256` |
 | Authorized asset discovery | `python asset_discovery.py --scope 127.0.0.1/32 --ports 22,80,443 --format md --output inventory.md` |
-| Authorized service exposure review | `python port_scanner.py --target-file samples/authorized_scope_sample.txt --ports 22,80,443,445,3389 --format html --output exposure.html` |
+| Authorized Nmap service enumeration | `python nmap_scanner.py --target-file samples/authorized_scope_sample.txt --ports 22,80,443,445,3389 --output exposure.txt` |
 
 More workflow notes are available in [Analyst Workflows](docs/analyst-workflows.md).
 
@@ -78,8 +79,9 @@ python asset_discovery.py --scope 127.0.0.1/32 --ports 22,80,443 --include-inact
 python asset_discovery.py --scope-file samples/authorized_scope_sample.txt --format csv --output asset_inventory.csv
 python port_scanner.py --target 127.0.0.1 --ports 22,80,443
 python port_scanner.py --targets 127.0.0.1,localhost --ports 22,80,443 --format txt --output service_exposure.txt
-python port_scanner.py --target-file samples/authorized_scope_sample.txt --ports 22,80,443,445,3389 --format html --output service_exposure.html
 python port_scanner.py --target-file samples/authorized_scope_sample.txt --ports 22,80,443,445,3389 --format json --output service_exposure.json
+python nmap_scanner.py --target 127.0.0.1 --ports 22,80,443 --output nmap_service_exposure.txt
+python nmap_scanner.py --target-file samples/authorized_scope_sample.txt --ports 22,80,443,445,3389 --output nmap_service_exposure.txt
 ```
 
 The enumeration tools are intentionally framed around **authorized asset visibility** and **service exposure documentation**. The goal is not to make a stealthy scanner. The goal is to demonstrate that I understand scope, reporting, basic automation, and how discovery findings turn into analyst follow-up questions.
@@ -91,7 +93,8 @@ The enumeration tools are intentionally framed around **authorized asset visibil
 | `samples/authorized_scope_sample.txt` | Demonstrates how an analyst defines testing scope before running discovery. |
 | `samples/asset_inventory_sample.csv` | Shows the type of asset inventory output a recruiter can inspect quickly. |
 | `samples/port_exposure_sample.md` | Shows how raw service discovery becomes a short defensive review report. |
-| `service_exposure.txt` or `service_exposure.html` | Recommended local output names when you want enumeration-phase reference notes from `port_scanner.py`. |
+| `service_exposure.txt` | Recommended local output name when you want enumeration-phase reference notes from `port_scanner.py`. |
+| `nmap_service_exposure.txt` | Recommended local output name when you want Nmap-based enumeration notes from `nmap_scanner.py`. |
 
 ## Repository Standard
 

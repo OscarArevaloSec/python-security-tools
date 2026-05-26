@@ -42,15 +42,15 @@ This is the strongest enumeration workflow for a blue-team portfolio because it 
 |---|---|---|
 | 1 | Scope file | Document the lab subnet, hosts, or training targets that are explicitly authorized. |
 | 2 | `asset_discovery.py` | Identify responsive assets using conservative TCP probes. |
-| 3 | `port_scanner.py` | Review exposed TCP services on identified or approved hosts. |
-| 4 | Markdown or CSV report | Convert findings into an inventory or exposure review artifact. |
+| 3 | `nmap_scanner.py` | Run Nmap against identified or approved hosts and produce a TXT enumeration report. |
+| 4 | TXT report | Convert Nmap findings into an enumeration-phase reference artifact. |
 | 5 | Analyst notes | Record ownership, expected services, remote admin exposure, and follow-up questions. |
 
 Example commands:
 
 ```bash
 python asset_discovery.py --scope-file samples/authorized_scope_sample.txt --format csv --output asset_inventory.csv
-python port_scanner.py --target-file samples/authorized_scope_sample.txt --ports 22,80,443,445,3389 --format md --output service_exposure.md
+python nmap_scanner.py --target-file samples/authorized_scope_sample.txt --ports 22,80,443,445,3389 --output nmap_service_exposure.txt
 ```
 
 A recruiter should be able to inspect the resulting report and see more than open ports. The report should answer what was in scope, which assets responded, which services were exposed, why those services matter defensively, and what questions an analyst would ask next.
@@ -59,7 +59,7 @@ A recruiter should be able to inspect the resulting report and see more than ope
 
 | Step | Tool | Purpose |
 |---|---|---|
-| 1 | `port_scanner.py` | Identify open TCP ports in an authorized lab. |
+| 1 | `nmap_scanner.py` | Identify open TCP ports and service/version details in an authorized lab, then save TXT notes. |
 | 2 | `subdomain_enum.py` | Practice DNS discovery against a permitted lab domain. |
 | 3 | `dir_enum.py` | Practice web content discovery in authorized environments. |
 
