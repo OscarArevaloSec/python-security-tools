@@ -11,7 +11,8 @@ Purpose:
 Usage:
     python port_scanner.py --target <host> --ports <range|list> [options]
     python port_scanner.py --targets 192.168.56.10,192.168.56.11 --ports 22,80,443 --format md --output report.md
-    python port_scanner.py --target-file samples/authorized_scope_sample.txt --ports 1-1024 --format csv --output exposure.csv
+    python port_scanner.py --target-file samples/authorized_scope_sample.txt --ports 1-1024 --format txt --output exposure.txt
+    python port_scanner.py --target 127.0.0.1 --ports 1-1024 --format html --output exposure.html
 
 Disclaimer:
     Use only on systems you own or are explicitly authorized to assess.
@@ -25,6 +26,7 @@ import ipaddress
 import json
 import socket
 import sys
+from html import escape
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -259,6 +261,125 @@ def write_markdown(results: list[dict], output: str, metadata: dict) -> None:
     Path(output).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def write_text_report(results: list[dict], output: str, metadata: dict) -> None:
+    """Write a plain-text report suitable for enumeration notes."""
+    lines = [
+        "Authorized Service Exposure Review",
+        "=" * 36,
+        "",
+        f"Generated: {metadata['generated_at']}",
+        f"Targets reviewed: {metadata['targets_reviewed']}",
+        f"Ports reviewed: {metadata['ports_reviewed']}",
+        f"Checks performed: {metadata['checks_performed']}",
+        f"Open services found: {len(results)}",
+        "",
+        "Scope Reminder:",
+        "  This report is intended for authorized asset inventory and defensive service exposure review.",
+        "",
+        "Open Services:",
+        "-" * 14,
+    ]
+    if results:
+        for item in results:
+            lines.extend([
+                f"Target: {item['target']}",
+                f"IP: {item['ip']}",
+                f"Hostname: {item.get('hostname', '') or 'N/A'}",
+                f"Port/Protocol: {item['port']}/{item['protocol']}",
+                f"Service: {item['service']}",
+                f"Banner: {item.get('banner', '') or 'N/A'}",
+                f"Analyst Note: {item.get('analyst_note', '')}",
+                "",
+            ])
+    else:
+        lines.extend(["No open services identified.", ""])
+
+    lines.extend([
+        "Enumeration Follow-Up Questions:",
+        "1. Is each exposed service expected for this asset's role?",
+        "2. Is administrative access restricted to approved management networks?",
+        "3. Are service owners, patch status, and compensating controls documented?",
+        "4. Should additional enumeration be performed for HTTP, SMB, SSH, RDP, DNS, or database services?",
+    ])
+    Path(output).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+
+def write_html_report(results: list[dict], output: str, metadata: dict) -> None:
+    """Write a standalone HTML report for browser-based enumeration review."""
+    rows = []
+    if results:
+        for item in results:
+            rows.append(
+                "<tr>"
+                f"<td>{escape(str(item['target']))}</td>"
+                f"<td>{escape(str(item['ip']))}</td>"
+                f"<td>{escape(str(item.get('hostname', '') or 'N/A'))}</td>"
+                f"<td>{escape(str(item['port']))}/{escape(str(item['protocol']))}</td>"
+                f"<td>{escape(str(item['service']))}</td>"
+                f"<td><code>{escape(str(item.get('banner', '') or 'N/A'))}</code></td>"
+                f"<td>{escape(str(item.get('analyst_note', '')))}</td>"
+                "</tr>"
+            )
+    else:
+        rows.append('<tr><td colspan="7">No open services identified.</td></tr>')
+
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorized Service Exposure Review</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; margin: 2rem; color: #1f2933; background: #f7f9fb; }}
+    main {{ max-width: 1200px; margin: auto; background: #ffffff; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08); }}
+    h1, h2 {{ color: #102a43; }}
+    .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin: 1.5rem 0; }}
+    .card {{ border: 1px solid #d9e2ec; border-radius: 10px; padding: 1rem; background: #f0f4f8; }}
+    .card strong {{ display: block; font-size: 1.5rem; color: #0b5cad; }}
+    table {{ border-collapse: collapse; width: 100%; margin-top: 1rem; }}
+    th, td {{ border: 1px solid #d9e2ec; padding: 0.65rem; text-align: left; vertical-align: top; }}
+    th {{ background: #102a43; color: #ffffff; }}
+    tr:nth-child(even) {{ background: #f7f9fb; }}
+    code {{ white-space: pre-wrap; word-break: break-word; }}
+    .notice {{ border-left: 4px solid #f0b429; background: #fffbea; padding: 1rem; margin: 1rem 0; }}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Authorized Service Exposure Review</h1>
+  <p class="notice">This report is intended for authorized asset inventory and defensive service exposure review. Confirm written scope before scanning any network or host.</p>
+  <section class="summary">
+    <div class="card"><span>Generated</span><strong>{escape(str(metadata['generated_at']))}</strong></div>
+    <div class="card"><span>Targets Reviewed</span><strong>{metadata['targets_reviewed']}</strong></div>
+    <div class="card"><span>Ports Reviewed</span><strong>{metadata['ports_reviewed']}</strong></div>
+    <div class="card"><span>Checks Performed</span><strong>{metadata['checks_performed']}</strong></div>
+    <div class="card"><span>Open Services Found</span><strong>{len(results)}</strong></div>
+  </section>
+  <h2>Open Services</h2>
+  <table>
+    <thead>
+      <tr><th>Target</th><th>IP</th><th>Hostname</th><th>Port/Protocol</th><th>Service</th><th>Banner</th><th>Analyst Note</th></tr>
+    </thead>
+    <tbody>
+      {''.join(rows)}
+    </tbody>
+  </table>
+  <h2>Enumeration Follow-Up Questions</h2>
+  <ol>
+    <li>Is each exposed service expected for this asset's role?</li>
+    <li>Is administrative access restricted to approved management networks?</li>
+    <li>Are service owners, patch status, and compensating controls documented?</li>
+    <li>Should additional enumeration be performed for HTTP, SMB, SSH, RDP, DNS, or database services?</li>
+  </ol>
+</main>
+</body>
+</html>
+"""
+    Path(output).write_text(html, encoding="utf-8")
+
+
+
 def print_results(results: list[dict], metadata: dict) -> None:
     print(f"\n[+] Scan completed at {metadata['generated_at']}")
     print(f"[+] Targets reviewed: {metadata['targets_reviewed']} | Ports reviewed: {metadata['ports_reviewed']}")
@@ -288,7 +409,8 @@ def main() -> int:
             "Examples:\n"
             "  python port_scanner.py --target 127.0.0.1 --ports 22,80,443\n"
             "  python port_scanner.py --targets 192.168.56.10,192.168.56.11 --ports 1-1024 --format md --output report.md\n"
-            "  python port_scanner.py --target-file samples/authorized_scope_sample.txt --ports 22,80,443 --format csv --output exposure.csv"
+            "  python port_scanner.py --target-file samples/authorized_scope_sample.txt --ports 22,80,443 --format txt --output exposure.txt\n"
+            "  python port_scanner.py --target 127.0.0.1 --ports 1-1024 --format html --output exposure.html"
         ),
     )
     parser.add_argument("--target", help="Single target IP or hostname")
@@ -299,7 +421,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=1.0, help="Socket timeout in seconds. Default: 1.0")
     parser.add_argument("--max-hosts", type=int, default=256, help="Maximum hosts allowed after CIDR expansion. Default: 256")
     parser.add_argument("--no-banner", action="store_true", help="Disable light banner grabbing")
-    parser.add_argument("--format", choices=["text", "json", "csv", "md"], default="text", help="Output format")
+    parser.add_argument("--format", choices=["text", "txt", "json", "csv", "md", "html"], default="text", help="Output format for --output. Use txt or html for enumeration notes.")
     parser.add_argument("--output", help="Save structured results to a file")
     args = parser.parse_args()
 
@@ -355,8 +477,10 @@ def main() -> int:
             write_json(results, args.output, metadata)
         elif args.format == "md":
             write_markdown(results, args.output, metadata)
+        elif args.format == "html":
+            write_html_report(results, args.output, metadata)
         else:
-            write_markdown(results, args.output, metadata)
+            write_text_report(results, args.output, metadata)
         print(f"\n[+] Results saved to {args.output}")
     return 0
 
