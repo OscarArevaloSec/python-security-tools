@@ -15,10 +15,10 @@ Install dnspython for better results (optional):
 Disclaimer: For authorized testing and educational use only.
 """
 
-import socket
 import argparse
-import sys
 import os
+import socket
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
@@ -30,12 +30,25 @@ except ImportError:
     HAS_DNSPYTHON = False
 
 
+# Module-level resolver, configured once in main() so a custom --resolver
+# nameserver is actually honored by every worker thread.
+_RESOLVER = None
+
+
+def configure_resolver(nameserver: str | None = None) -> None:
+    """Build the shared dnspython resolver (optionally with a custom nameserver)."""
+    global _RESOLVER
+    _RESOLVER = dns.resolver.Resolver()
+    _RESOLVER.timeout = 2
+    _RESOLVER.lifetime = 2
+    if nameserver:
+        _RESOLVER.nameservers = [nameserver]
+
+
 def resolve_subdomain_dns(subdomain: str) -> list[str] | None:
     """Resolve using dnspython (more reliable, supports custom resolvers)."""
+    resolver = _RESOLVER if _RESOLVER is not None else dns.resolver.Resolver()
     try:
-        resolver = dns.resolver.Resolver()
-        resolver.timeout = 2
-        resolver.lifetime = 2
         answers = resolver.resolve(subdomain, "A")
         return [str(r) for r in answers]
     except Exception:
@@ -64,7 +77,7 @@ def load_wordlist(path: str) -> list[str]:
     if not os.path.isfile(path):
         print(f"[!] Wordlist not found: {path}")
         sys.exit(1)
-    with open(path, "r", errors="ignore") as f:
+    with open(path, errors="ignore") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 
@@ -82,9 +95,10 @@ def main():
     parser.add_argument("--resolver", help="Custom DNS resolver IP (requires dnspython)")
     args = parser.parse_args()
 
-    if args.resolver and HAS_DNSPYTHON:
-        dns.resolver.default_resolver = dns.resolver.Resolver()
-        dns.resolver.default_resolver.nameservers = [args.resolver]
+    if HAS_DNSPYTHON:
+        configure_resolver(args.resolver)
+    elif args.resolver:
+        print("[!] --resolver requires dnspython; install with: pip install dnspython")
 
     resolver_mode = "dnspython" if HAS_DNSPYTHON else "socket (install dnspython for better results)"
     print(f"\n[*] Target domain : {args.domain}")

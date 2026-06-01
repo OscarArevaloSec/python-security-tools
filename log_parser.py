@@ -24,12 +24,11 @@ Disclaimer: For authorized testing and educational use only.
 """
 
 import argparse
-import re
 import os
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime
-
 
 # ─── REGEX PATTERNS ──────────────────────────────────────────────────────────
 
@@ -47,7 +46,7 @@ PATTERNS = {
         re.IGNORECASE,
     ),
     "su": re.compile(
-        r"(?P<date>\w+\s+\d+\s+[\u:]+).*su\[.*\].*session (?P<action>opened|closed) for user (?P<user>\S+)",
+        r"(?P<date>\w+\s+\d+\s+[\d:]+).*su\[.*\].*session (?P<action>opened|closed) for user (?P<user>\S+)",
         re.IGNORECASE,
     ),
     "new_user": re.compile(
@@ -55,7 +54,7 @@ PATTERNS = {
         re.IGNORECASE,
     ),
     "new_group": re.compile(
-        r"(?P<date>\w+\s+\d+\s+[\u:]+).*groupadd.*new group.*name=(?P<group>\S+)",
+        r"(?P<date>\w+\s+\d+\s+[\d:]+).*groupadd.*new group.*name=(?P<group>\S+)",
         re.IGNORECASE,
     ),
     "lockout": re.compile(
@@ -74,7 +73,7 @@ PATTERNS = {
 }
 
 
-def parse_file(path: str, filter_type: str, brute_threshold: int, log_type: str) -> dict:
+def parse_file(path: str, filter_type: str, brute_threshold: int, log_type: str) -> tuple[dict, int]:
     """Parse a log file and return categorised events."""
     results = {
         "ssh_fail": [],
@@ -95,7 +94,7 @@ def parse_file(path: str, filter_type: str, brute_threshold: int, log_type: str)
         print(f"[!] File not found: {path}")
         sys.exit(1)
 
-    with open(path, "r", errors="ignore") as f:
+    with open(path, errors="ignore") as f:
         content = f.read()
 
     lines = content.splitlines()
@@ -134,20 +133,6 @@ def parse_file(path: str, filter_type: str, brute_threshold: int, log_type: str)
     return results, total_lines
 
 
-def print_section(title: str, items: list, keys: list[str], labels: list[str]):
-    if not items:
-        print(f"  None detected.")
-        return
-    header = "  " + "  ".join(f"{l:<20}" for l in labels)
-    print(header)
-    print("  " + "-" * (len(header) - 2))
-    for item in items[:50]:  # cap display at 50 per section
-        row = "  " + "  ".join(f"{a4r(item.get(k, '')):<20}" for k in keys)
-        print(row)
-    if len(items) > 50:
-        print(f"  ... and {len(items) - 50} more")
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Linux auth.log / syslog / Windows event log analyser",
@@ -164,7 +149,7 @@ def main():
     parser.add_argument("--output", help="Save report to file")
     args = parser.parse_args()
 
-    print(f"\n[*] Log Parser")
+    print("\n[*] Log Parser")
     print(f"    File      : {args.file}")
     print(f"    Type      : {args.type}")
     print(f"    Filter    : {args.filter}")
@@ -226,7 +211,7 @@ def main():
         else:
             out("  None detected.")
 
-        out(f"\n[NEW USER/GROUP CREATION]")
+        out("\n[NEW USER/GROUP CREATION]")
         for e in results["new_user"]:
             out(f"  [+] New user  : {e.get('user','')} at {e.get('date','')}")
         for e in results["new_group"]:
@@ -242,7 +227,7 @@ def main():
             out("  None detected.")
 
     out(f"\n{'='*60}")
-    out(f" Summary:")
+    out(" Summary:")
     out(f"   SSH failures       : {len(results['ssh_fail'])}")
     out(f"   SSH successes      : {len(results['ssh_success'])}")
     out(f"   Brute-force IPs    : {len(results['brute_force'])}")

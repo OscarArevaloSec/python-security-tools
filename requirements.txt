@@ -1,0 +1,5 @@
+# Optional runtime dependencies. Core tools (log_parser, ioc_parser,
+# hash_checker, asset_discovery, port_scanner, nmap_scanner) run on the
+# standard library alone.
+requests>=2.31      # HTTP tools: dir_enum.py, user_enum.py (http mode)
+dnspython>=2.4      # subdomain_enum.py (improved DNS resolution)

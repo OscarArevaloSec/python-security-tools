@@ -24,9 +24,8 @@ Disclaimer: For authorized testing and educational use only.
 import argparse
 import hashlib
 import os
-import sys
 import re
-
+import sys
 
 ALGORITHMS = ["md5", "sha1", "sha224", "sha256", "sha384", "sha512"]
 
@@ -195,7 +194,7 @@ def main():
         if matched_algo:
             print(f"  [✓ MATCH]  Hash matches {matched_algo.upper()} — file integrity verified.")
         else:
-            print(f"  [✗ NO MATCH]  Provided hash does not match any computed value.")
+            print("  [✗ NO MATCH]  Provided hash does not match any computed value.")
             print(f"               Provided : {known}")
             guesses = identify_hash(known)
             print(f"               Hash type: {', '.join(guesses)}")

@@ -17,15 +17,14 @@ Disclaimer: For authorized testing and educational use only.
 """
 
 import argparse
-import sys
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 try:
     import requests
-    from requests.packages.urllib3.exceptions import InsecureRequestWarning
-    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+    import urllib3
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
@@ -37,15 +36,15 @@ def load_wordlist(path: str) -> list[str]:
     if not os.path.isfile(path):
         print(f"[!] Wordlist not found: {path}")
         sys.exit(1)
-    with open(path, "r", errors="ignore") as f:
+    with open(path, errors="ignore") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 
-def probe(session: requests.Session, url: str, timeout: float) -> dict | None:
+def probe(session: requests.Session, url: str, timeout: float, verify: bool = True) -> dict | None:
     """Make a GET request and return result dict."""
     try:
         resp = session.get(url, timeout=timeout, allow_redirects=False,
-                           verify=False)
+                           verify=verify)
         return {
             "url": url,
             "status": resp.status_code,
@@ -79,7 +78,13 @@ def main():
     parser.add_argument("--output", help="Save results to file")
     parser.add_argument("--user-agent", default="Mozilla/5.0 (compatible; DirEnum/1.0)",
                         help="Custom User-Agent string")
+    parser.add_argument("--insecure", action="store_true",
+                        help="Disable TLS certificate verification (for self-signed lab targets)")
     args = parser.parse_args()
+
+    verify = not args.insecure
+    if args.insecure:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     base_url = args.url.rstrip("/")
     show_codes = {int(c.strip()) for c in args.status.split(",") if c.strip()}
@@ -108,7 +113,7 @@ def main():
     session.headers["User-Agent"] = args.user_agent
 
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
-        futures = {executor.submit(probe, session, url, args.timeout): url
+        futures = {executor.submit(probe, session, url, args.timeout, verify): url
                    for url in targets}
         for future in as_completed(futures):
             result = future.result()

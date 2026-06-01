@@ -1,5 +1,7 @@
 # Python Security Tools
 
+[![CI](https://github.com/OscarArevaloSec/python-security-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/OscarArevaloSec/python-security-tools/actions/workflows/ci.yml)
+
 This repository contains small Python scripts for security learning, analyst automation, log review, IOC extraction, hash checking, and **authorized defensive enumeration**. The blue-team purpose is to show that I can use Python to support repeatable investigation workflows, asset visibility, and evidence-based reporting.
 
 These scripts are for educational use in authorized labs such as home labs, Hack The Box, TryHackMe, and intentionally vulnerable environments. They must not be used against systems without explicit permission.
@@ -18,6 +20,7 @@ These scripts are for educational use in authorized labs such as home labs, Hack
 | `dir_enum.py` | Web directory and file brute-forcer with status and size filtering. | Supports web lab enumeration and defensive log-awareness. | Ready |
 | `smb_enum.py` | SMB share enumeration and RPC user or group enumeration. | Supports Windows and SMB lab practice. | Ready |
 | `user_enum.py` | Username enumeration via HTTP response analysis or SMB/RID brute force. | Supports understanding authentication weaknesses in labs. | Ready |
+| `common.py` | Shared helpers (port parsing, scope loading, CIDR expansion, reverse DNS, subprocess). | Internal module imported by the other tools; not run directly. | Ready |
 
 ## Requirements
 
@@ -30,9 +33,12 @@ These scripts are for educational use in authorized labs such as home labs, Hack
 Install optional packages only in your own lab environment:
 
 ```bash
-pip install requests dnspython
+pip install -r requirements.txt          # requests, dnspython
 sudo apt install nmap smbclient
 ```
+
+The HTTP tools (`dir_enum.py`, `user_enum.py`) verify TLS certificates by
+default; pass `--insecure` to allow self-signed certificates on lab targets.
 
 ## Blue-Team Workflows
 
@@ -99,6 +105,18 @@ The enumeration tools are intentionally framed around **authorized asset visibil
 ## Repository Standard
 
 Each tool should include help output, safe usage examples, expected input, expected output, and a short explanation of the security concept it demonstrates. For enumeration tools, each example should clearly state that it is for an **owned lab or explicitly authorized scope**.
+
+## Development
+
+Continuous integration runs linting, an import smoke test, and the unit tests
+on Python 3.10–3.12 (see `.github/workflows/ci.yml`). To run the same checks
+locally:
+
+```bash
+pip install -r requirements-dev.txt   # pytest, ruff
+ruff check .                          # lint
+pytest -q                             # unit tests (tests/)
+```
 
 ## Disclaimer
 

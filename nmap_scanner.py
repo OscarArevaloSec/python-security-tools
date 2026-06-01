@@ -19,7 +19,6 @@ Disclaimer:
 from __future__ import annotations
 
 import argparse
-import ipaddress
 import shutil
 import subprocess
 import sys
@@ -27,6 +26,8 @@ import tempfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
+
+from common import expand_target, parse_ports, read_lines
 
 EXPOSURE_NOTES = {
     21: "FTP service; verify anonymous access, encryption requirements, and business need.",
@@ -46,65 +47,6 @@ EXPOSURE_NOTES = {
 }
 
 
-def parse_ports(port_str: str) -> list[int]:
-    """Validate a port range or comma-separated list and return sorted ports."""
-    ports: set[int] = set()
-    for part in port_str.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if "-" in part:
-            start_text, end_text = part.split("-", 1)
-            start, end = int(start_text), int(end_text)
-            if start > end:
-                raise ValueError(f"Invalid port range: {part}")
-            ports.update(range(start, end + 1))
-        else:
-            ports.add(int(part))
-
-    invalid = [port for port in ports if port < 1 or port > 65535]
-    if invalid:
-        raise ValueError(f"Ports must be between 1 and 65535. Invalid: {invalid[:5]}")
-    if not ports:
-        raise ValueError("At least one valid port is required.")
-    return sorted(ports)
-
-
-def load_target_file(path: str) -> list[str]:
-    """Load targets from a scope file, ignoring blank lines and comments."""
-    target_path = Path(path)
-    if not target_path.is_file():
-        raise FileNotFoundError(f"Target file not found: {path}")
-    targets = []
-    for line in target_path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            targets.append(line)
-    return targets
-
-
-def expand_target_value(value: str, max_hosts: int) -> list[str]:
-    """Expand a single host, hostname, or CIDR into target values."""
-    value = value.strip()
-    if not value:
-        return []
-    try:
-        network = ipaddress.ip_network(value, strict=False)
-        hosts = [str(host) for host in network.hosts()]
-        if network.num_addresses == 1:
-            hosts = [str(network.network_address)]
-        if len(hosts) > max_hosts:
-            raise ValueError(
-                f"CIDR {value} expands to {len(hosts)} hosts, which exceeds --max-hosts {max_hosts}. "
-                "Use a smaller authorized scope."
-            )
-        return hosts
-    except ValueError as exc:
-        if "/" in value:
-            raise exc
-        return [value]
-
-
 def collect_targets(args: argparse.Namespace) -> list[str]:
     """Collect targets from CLI arguments and preserve order while de-duplicating."""
     raw_targets: list[str] = []
@@ -113,13 +55,13 @@ def collect_targets(args: argparse.Namespace) -> list[str]:
     if args.targets:
         raw_targets.extend([target.strip() for target in args.targets.split(",") if target.strip()])
     if args.target_file:
-        raw_targets.extend(load_target_file(args.target_file))
+        raw_targets.extend(read_lines(args.target_file))
     if not raw_targets:
         raise ValueError("Provide --target, --targets, or --target-file.")
 
     expanded: list[str] = []
     for value in raw_targets:
-        expanded.extend(expand_target_value(value, args.max_hosts))
+        expanded.extend(expand_target(value, args.max_hosts))
     return list(dict.fromkeys(expanded))
 
 

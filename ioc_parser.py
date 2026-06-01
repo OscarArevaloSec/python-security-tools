@@ -28,11 +28,11 @@ Disclaimer: For authorized testing and educational use only.
 """
 
 import argparse
-import re
+import ipaddress
 import os
+import re
 import sys
 from collections import defaultdict
-
 
 # ─── IOC REGEX PATTERNS ──────────────────────────────────────────────────────
 
@@ -40,11 +40,11 @@ IOC_PATTERNS = {
     "ip": re.compile(
         r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
     ),
-    "ipv6": re.compile(
-        r"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b"
-        r"|\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b"
-        r"|\b::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}\b"
-    ),
+    # Broad candidate for IPv6: any run of hex groups separated by colons
+    # (including "::" compression). Candidates are validated with
+    # ipaddress.IPv6Address in extract_iocs(), so false positives such as
+    # timestamps (12:34:56) are discarded rather than mis-captured.
+    "ipv6": re.compile(r"(?:[0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f]{0,4}"),
     "url": re.compile(
         r"https?://[^\s\"'<>]+|ftp://[^\s\"'<>]+",
         re.IGNORECASE,
@@ -82,8 +82,6 @@ NOISE_HASHES = {
     "0" * 64,
     "f" * 32, "f" * 40, "f" * 64,
 }
-# Version-like patterns to suppress (e.g., 1.2.3.4 in version strings)
-VERSION_PATTERN = re.compile(r"\bv?(\d+\.\d+\.\d+\.\d+)\b")
 
 
 def defang(value: str, ioc_type: str) -> str:
@@ -116,15 +114,27 @@ def extract_iocs(text: str, types: list[str], defang_output: bool = True) -> dic
             if ioc_type == "ip":
                 if m in NOISE_IPS:
                     continue
-                # Skip version strings like 1.2.3.4
-                if VERSION_PATTERN.match(m):
+                # Validate as a real IPv4 address (also drops invalid octets)
+                try:
+                    ipaddress.IPv4Address(m)
+                except ValueError:
                     continue
+
+            # Validate IPv6 candidates; discard timestamps and other false positives
+            if ioc_type == "ipv6":
+                try:
+                    canonical = str(ipaddress.IPv6Address(m))
+                except ValueError:
+                    continue
+                if canonical != m and canonical in seen:
+                    continue
+                seen.add(canonical)
+                m = canonical
 
             if ioc_type in ("md5", "sha1", "sha256"):
                 if m.lower() in NOISE_HASHES:
                     continue
 
-            # Remove domains that are actually part of URLs (avoid duplicates)
             if ioc_type == "domain":
                 # Skip if domain looks like a version number
                 if re.match(r"^\d+\.\d+", m):
@@ -132,6 +142,15 @@ def extract_iocs(text: str, types: list[str], defang_output: bool = True) -> dic
 
             display = defang(m, ioc_type) if defang_output else m
             results[ioc_type].append((m, display))
+
+    # Drop domains that are merely the host portion of an already-captured URL
+    if results.get("domain") and results.get("url"):
+        url_blob = " ".join(original.lower() for original, _ in results["url"])
+        results["domain"] = [
+            (original, display)
+            for original, display in results["domain"]
+            if original.lower() not in url_blob
+        ]
 
     return results
 
@@ -159,10 +178,7 @@ def print_iocs(results: dict, defang_output: bool = True):
             continue
         label = type_labels.get(ioc_type, ioc_type.upper())
         print(f"  ── {label} ({len(items)}) ──")
-        for original, displayed in items:
-            note = ""
-            if defang_output and original != displayed:
-                pass  # defanged version already shown
+        for _original, displayed in items:
             print(f"    {displayed}")
         print()
 
@@ -195,7 +211,7 @@ def main():
         if not os.path.isfile(args.file):
             print(f"[!] File not found: {args.file}")
             sys.exit(1)
-        with open(args.file, "r", errors="ignore") as f:
+        with open(args.file, errors="ignore") as f:
             text = f.read()
         print(f"\n[*] Scanning file: {args.file}  ({len(text):,} chars)")
     else:

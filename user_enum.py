@@ -23,16 +23,16 @@ Disclaimer: For authorized testing and educational use only.
 """
 
 import argparse
-import subprocess
-import sys
 import os
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from common import run_cmd
+
 try:
     import requests
-    from requests.packages.urllib3.exceptions import InsecureRequestWarning
-    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+    import urllib3
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
@@ -42,7 +42,7 @@ def load_wordlist(path: str) -> list[str]:
     if not os.path.isfile(path):
         print(f"[!] Wordlist not found: {path}")
         sys.exit(1)
-    with open(path, "r", errors="ignore") as f:
+    with open(path, errors="ignore") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 
@@ -60,11 +60,11 @@ WRONG_PASS_KEYWORDS = [
 
 
 def calibrate(session, url: str, user_field: str, pass_field: str,
-              fake_user: str = "zz_nonexistent_user_zz123") -> dict:
+              fake_user: str = "zz_nonexistent_user_zz123", verify: bool = True) -> dict:
     """Measure baseline response for a definitely-invalid user."""
     data = {user_field: fake_user, pass_field: "x"}
     t0 = time.perf_counter()
-    resp = session.post(url, data=data, timeout=10, verify=False,
+    resp = session.post(url, data=data, timeout=10, verify=verify,
                         allow_redirects=False)
     elapsed = time.perf_counter() - t0
     return {
@@ -112,9 +112,12 @@ def http_enum(args):
         sys.exit(1)
 
     session = requests.Session()
+    verify = not getattr(args, "insecure", False)
+    if not verify:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     words = load_wordlist(args.wordlist)
 
-    print(f"\n[*] HTTP User Enumeration")
+    print("\n[*] HTTP User Enumeration")
     print(f"    Target URL   : {args.url}")
     print(f"    User field   : {args.user_field}")
     print(f"    Pass field   : {args.pass_field}")
@@ -122,7 +125,7 @@ def http_enum(args):
 
     print("[*] Calibrating baseline response...")
     try:
-        baseline = calibrate(session, args.url, args.user_field, args.pass_field)
+        baseline = calibrate(session, args.url, args.user_field, args.pass_field, verify=verify)
     except Exception as e:
         print(f"[!] Calibration failed: {e}")
         sys.exit(1)
@@ -138,7 +141,7 @@ def http_enum(args):
         try:
             t0 = time.perf_counter()
             resp = session.post(args.url, data=data, timeout=10,
-                                verify=False, allow_redirects=False)
+                                verify=verify, allow_redirects=False)
             elapsed = time.perf_counter() - t0
             verdict = classify_http(resp.text, len(resp.content), elapsed, baseline)
             return {
@@ -148,7 +151,7 @@ def http_enum(args):
                 "time": elapsed,
                 "verdict": verdict,
             }
-        except Exception as e:
+        except Exception:
             return {"user": username, "status": 0, "length": 0, "time": 0, "verdict": "error"}
 
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
@@ -165,16 +168,6 @@ def http_enum(args):
 
 
 # ─── SMB MODE ─────────────────────────────────────────────────────────────────
-
-def run_cmd(cmd: list[str], timeout: int = 15) -> tuple[str, str]:
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return proc.stdout.strip(), proc.stderr.strip()
-    except FileNotFoundError:
-        return "", f"[!] {cmd[0]} not found. Install: sudo apt install smbclient"
-    except subprocess.TimeoutExpired:
-        return "", "[!] Timed out"
-
 
 def smb_enumdomusers(target: str) -> list[str]:
     print("[*] Trying enumdomusers (null session)...")
@@ -201,12 +194,7 @@ def rid_brute(target: str, rid_range: str) -> list[str]:
     print(f"\n[*] RID Brute Force: {start}–{end} (looking for user/group SIDs)")
 
     users = []
-    for rid in range(start, end + 1):
-        sid_cmd = f"lookupsids S-1-5-21-0-0-0-{rid}"  # placeholder domain SID
-        # First get the domain SID
-        break  # We'll use a smarter approach below
-
-    # Get domain SID first
+    # Resolve the domain SID first, then enumerate by appending each RID.
     out, err = run_cmd(["rpcclient", "-U", "%", "-N", target, "-c", "lsaquery"])
     domain_sid = None
     for line in out.splitlines():
@@ -238,7 +226,7 @@ def rid_brute(target: str, rid_range: str) -> list[str]:
 
 def smb_enum_mode(args):
     target = args.target
-    print(f"\n[*] SMB User Enumeration")
+    print("\n[*] SMB User Enumeration")
     print(f"    Target: {target}\n")
 
     found = smb_enumdomusers(target)
@@ -275,6 +263,8 @@ def main():
     parser.add_argument("--wordlist", help="Username wordlist (required for http mode)")
     parser.add_argument("--threads", type=int, default=10,
                         help="Threads for HTTP mode (default: 10)")
+    parser.add_argument("--insecure", action="store_true",
+                        help="Disable TLS verification in HTTP mode (self-signed lab targets)")
     parser.add_argument("--output", help="Save found usernames to file")
 
     # HTTP options

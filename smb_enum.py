@@ -24,11 +24,11 @@ Disclaimer: For authorized testing and educational use only.
 """
 
 import argparse
-import socket
-import subprocess
 import shutil
+import socket
 import sys
 
+from common import run_cmd
 
 BANNER = """
 ╔══════════════════════════════════╗
@@ -46,17 +46,6 @@ def check_port(target: str, port: int = 445, timeout: float = 3.0) -> bool:
         return result == 0
     except Exception:
         return False
-
-
-def run_cmd(cmd: list[str], timeout: int = 15) -> tuple[str, str]:
-    """Run a shell command and return (stdout, stderr)."""
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return proc.stdout.strip(), proc.stderr.strip()
-    except FileNotFoundError:
-        return "", f"[!] Command not found: {cmd[0]}. Install with: sudo apt install smbclient"
-    except subprocess.TimeoutExpired:
-        return "", "[!] Command timed out"
 
 
 def tool_check(name: str) -> bool:
@@ -167,7 +156,7 @@ def main():
     has_rpcclient = tool_check("rpcclient")
 
     # Port check
-    print(f"\n[*] Port Check:")
+    print("\n[*] Port Check:")
     for port in [139, 445]:
         open_ = check_port(args.target, port)
         status = "OPEN" if open_ else "closed"

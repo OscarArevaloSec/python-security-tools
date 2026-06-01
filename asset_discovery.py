@@ -28,66 +28,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+from common import expand_target, parse_ports, read_lines, reverse_dns
+
 DEFAULT_PROBE_PORTS = [22, 80, 135, 139, 443, 445, 3389, 5985]
-
-
-def parse_ports(text: str) -> list[int]:
-    ports: set[int] = set()
-    for item in text.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        if "-" in item:
-            start_text, end_text = item.split("-", 1)
-            start, end = int(start_text), int(end_text)
-            if start > end:
-                raise ValueError(f"Invalid port range: {item}")
-            ports.update(range(start, end + 1))
-        else:
-            ports.add(int(item))
-    invalid = [port for port in ports if port < 1 or port > 65535]
-    if invalid:
-        raise ValueError("Ports must be between 1 and 65535.")
-    return sorted(ports)
-
-
-def load_scope_file(path: str) -> list[str]:
-    scope_path = Path(path)
-    if not scope_path.is_file():
-        raise FileNotFoundError(f"Scope file not found: {path}")
-    return [
-        line.strip()
-        for line in scope_path.read_text(encoding="utf-8", errors="ignore").splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    ]
 
 
 def expand_scope(scope_items: list[str], max_hosts: int) -> list[str]:
     hosts: list[str] = []
     for item in scope_items:
-        try:
-            network = ipaddress.ip_network(item, strict=False)
-            if network.num_addresses == 1:
-                network_hosts = [str(network.network_address)]
-            else:
-                network_hosts = [str(host) for host in network.hosts()]
-            if len(network_hosts) > max_hosts:
-                raise ValueError(
-                    f"Scope {item} expands to {len(network_hosts)} hosts and exceeds --max-hosts {max_hosts}."
-                )
-            hosts.extend(network_hosts)
-        except ValueError as exc:
-            if "/" in item:
-                raise exc
-            hosts.append(item)
+        hosts.extend(expand_target(item, max_hosts))
     return list(dict.fromkeys(hosts))
-
-
-def reverse_dns(ip: str) -> str:
-    try:
-        return socket.gethostbyaddr(ip)[0]
-    except Exception:
-        return ""
 
 
 def tcp_probe(host: str, port: int, timeout: float) -> bool:
@@ -211,7 +161,7 @@ def main() -> int:
     if args.scope:
         scope_items.append(args.scope)
     if args.scope_file:
-        scope_items.extend(load_scope_file(args.scope_file))
+        scope_items.extend(read_lines(args.scope_file))
     if not scope_items:
         print("[!] Provide --scope or --scope-file.")
         return 2
