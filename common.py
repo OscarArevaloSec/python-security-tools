@@ -86,6 +86,20 @@ def expand_target(value: str, max_hosts: int) -> list[str]:
         return [value]
 
 
+def cap_threads(requested: int, max_threads: int = 200) -> int:
+    """Clamp a user-supplied thread count to a safe, valid range.
+
+    ThreadPoolExecutor raises ValueError for max_workers < 1, so this
+    guarantees a usable value while also capping unreasonably high counts.
+    """
+    if requested < 1:
+        return 1
+    if requested > max_threads:
+        print(f"[!] Thread count capped at {max_threads} for safe lab usage.")
+        return max_threads
+    return requested
+
+
 def reverse_dns(ip: str) -> str:
     """Best-effort reverse DNS lookup; returns '' on failure."""
     try:
