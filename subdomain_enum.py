@@ -22,6 +22,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
+from common import cap_threads
+
 # Try to use dnspython for better DNS resolution; fall back to socket
 try:
     import dns.resolver
@@ -99,6 +101,8 @@ def main():
         configure_resolver(args.resolver)
     elif args.resolver:
         print("[!] --resolver requires dnspython; install with: pip install dnspython")
+
+    args.threads = cap_threads(args.threads)
 
     resolver_mode = "dnspython" if HAS_DNSPYTHON else "socket (install dnspython for better results)"
     print(f"\n[*] Target domain : {args.domain}")
