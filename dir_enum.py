@@ -22,6 +22,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
+from common import cap_threads
+
 try:
     import requests
     import urllib3
@@ -87,11 +89,21 @@ def main():
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     base_url = args.url.rstrip("/")
-    show_codes = {int(c.strip()) for c in args.status.split(",") if c.strip()}
+    if not base_url.lower().startswith(("http://", "https://")):
+        print(f"[!] --url must start with http:// or https:// (got: {args.url!r})")
+        sys.exit(1)
+
+    try:
+        show_codes = {int(c.strip()) for c in args.status.split(",") if c.strip()}
+    except ValueError as exc:
+        print(f"[!] Invalid --status value: {exc}")
+        sys.exit(1)
+
     extensions = [""] + [e if e.startswith(".") else f".{e}"
                          for e in args.extensions.split(",") if e.strip()]
 
     words = load_wordlist(args.wordlist)
+    threads = cap_threads(args.threads)
 
     # Build full URL list
     targets = []
@@ -101,7 +113,7 @@ def main():
 
     print(f"\n[*] Target    : {base_url}")
     print(f"[*] Wordlist  : {len(words)} words × {len(extensions)} extension(s) = {len(targets)} requests")
-    print(f"[*] Threads   : {args.threads}")
+    print(f"[*] Threads   : {threads}")
     print(f"[*] Show codes: {sorted(show_codes)}")
     print(f"[*] Started   : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
@@ -112,7 +124,7 @@ def main():
     session = requests.Session()
     session.headers["User-Agent"] = args.user_agent
 
-    with ThreadPoolExecutor(max_workers=args.threads) as executor:
+    with ThreadPoolExecutor(max_workers=threads) as executor:
         futures = {executor.submit(probe, session, url, args.timeout, verify): url
                    for url in targets}
         for future in as_completed(futures):
