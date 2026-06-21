@@ -98,9 +98,12 @@ def build_nmap_command(args: argparse.Namespace, targets: list[str], xml_output:
     return command
 
 
-def run_nmap(command: list[str]) -> subprocess.CompletedProcess[str]:
-    """Execute Nmap and return the completed process."""
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+def run_nmap(command: list[str], timeout: int) -> subprocess.CompletedProcess[str] | None:
+    """Execute Nmap and return the completed process, or None if it times out."""
+    try:
+        return subprocess.run(command, capture_output=True, text=True, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
 
 
 def parse_nmap_xml(xml_path: str) -> list[dict]:
@@ -240,6 +243,8 @@ def main() -> int:
     parser.add_argument("--no-pn", dest="pn", action="store_false", help="Disable -Pn host discovery skip. Default uses -Pn for lab reliability")
     parser.add_argument("--no-version-detection", dest="version_detection", action="store_false", help="Disable -sV service/version detection")
     parser.add_argument("--reason", action="store_true", help="Ask Nmap to include port state reasons")
+    parser.add_argument("--nmap-timeout", type=int, default=600,
+                        help="Max seconds to wait for Nmap to finish. Default: 600")
     parser.set_defaults(pn=True, version_detection=True)
     args = parser.parse_args()
 
@@ -265,7 +270,11 @@ def main() -> int:
         xml_output = str(Path(temp_dir) / "nmap_output.xml")
         command = build_nmap_command(args, targets, xml_output)
         print(f"[*] Running Nmap against {len(targets)} authorized target(s) at {start_time.strftime('%Y-%m-%d %H:%M:%SZ')}")
-        completed = run_nmap(command)
+        completed = run_nmap(command, args.nmap_timeout)
+
+        if completed is None:
+            print(f"[!] Nmap did not finish within {args.nmap_timeout}s; aborting.")
+            return 5
 
         if completed.returncode not in (0, 1):
             print(f"[!] Nmap failed with return code {completed.returncode}")
