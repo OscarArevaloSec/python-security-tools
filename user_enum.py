@@ -28,7 +28,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from common import run_cmd
+from common import cap_threads, run_cmd
 
 try:
     import requests
@@ -154,7 +154,8 @@ def http_enum(args):
         except Exception:
             return {"user": username, "status": 0, "length": 0, "time": 0, "verdict": "error"}
 
-    with ThreadPoolExecutor(max_workers=args.threads) as executor:
+    threads = cap_threads(args.threads)
+    with ThreadPoolExecutor(max_workers=threads) as executor:
         futures = {executor.submit(probe_user, w): w for w in words}
         for future in as_completed(futures):
             r = future.result()
@@ -190,7 +191,14 @@ def smb_enumdomusers(target: str) -> list[str]:
 
 def rid_brute(target: str, rid_range: str) -> list[str]:
     """Brute-force RIDs to enumerate user accounts."""
-    start, end = (int(x) for x in rid_range.split("-"))
+    try:
+        start, end = (int(x) for x in rid_range.split("-", 1))
+    except ValueError:
+        print(f"[!] Invalid --rid-range '{rid_range}'. Expected format: START-END (e.g. 500-1200)")
+        return []
+    if start > end:
+        print(f"[!] --rid-range start ({start}) is greater than end ({end}).")
+        return []
     print(f"\n[*] RID Brute Force: {start}–{end} (looking for user/group SIDs)")
 
     users = []
