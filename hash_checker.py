@@ -179,7 +179,11 @@ def main():
 
     computed = {}
     for algo in algos:
-        h = hash_file(args.file, algo)
+        try:
+            h = hash_file(args.file, algo)
+        except (PermissionError, OSError) as e:
+            print(f"  {algo.upper():<12}  [ERROR: {e}]")
+            continue
         computed[algo] = h
         print(f"  {algo.upper():<12}  {h}")
 
